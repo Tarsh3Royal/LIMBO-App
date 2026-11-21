@@ -134,7 +134,7 @@ fun LimboConsoleScreen() {
             val externalCamId = manager.cameraIdList.firstOrNull { id ->
                 val chars = manager.getCameraCharacteristics(id)
                 chars.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_EXTERNAL
-            } ?: manager.cameraIdList.lastOrNull()
+            }
 
             if (externalCamId == null) {
                 isHdmiActive = false
@@ -349,7 +349,10 @@ fun LimboConsoleScreen() {
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 Button(
                                     onClick = { textureViewRef?.let { openExternalUvcCamera(it) } },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC51A4A))
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFFC51A4A),
+                                        contentColor = Color.White
+                                    )
                                 ) {
                                     Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(Modifier.width(6.dp))
@@ -435,7 +438,10 @@ fun LimboConsoleScreen() {
 
                     Button(
                         onClick = { showShutdownDialog = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC51A4A))
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFC51A4A),
+                            contentColor = Color.White
+                        )
                     ) {
                         Icon(Icons.Default.PowerSettingsNew, contentDescription = null, modifier = Modifier.size(17.dp))
                         Spacer(Modifier.width(6.dp))
@@ -454,7 +460,10 @@ fun LimboConsoleScreen() {
                 },
                 confirmButton = {
                     Button(
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC51A4A)),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFC51A4A),
+                            contentColor = Color.White
+                        ),
                         onClick = {
                             sendEsp32Command("SHUTDOWN")
                             statusText = "SHUTTING DOWN PI 4..."
@@ -473,4 +482,3 @@ fun LimboConsoleScreen() {
         }
     }
 }
-
