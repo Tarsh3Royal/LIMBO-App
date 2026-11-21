@@ -20,20 +20,24 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -45,6 +49,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import kotlinx.coroutines.delay
 import java.util.UUID
 
 val LIMBO_SERVICE_UUID: UUID = UUID.fromString("4fafc201-1fb5-459e-8fcc-c5c9c331914b")
@@ -77,15 +82,24 @@ class MainActivity : ComponentActivity() {
 fun LimboConsoleScreen() {
     val context = LocalContext.current
     var hudVisible by remember { mutableStateOf(true) }
-    var statusText by remember { mutableStateOf("Waiting for UVC Capture Card...") }
+    var isHdmiActive by remember { mutableStateOf(false) }
+    var statusText by remember { mutableStateOf("Waiting for HDMI Signal...") }
     var bleStatus by remember { mutableStateOf("ESP32: Disconnected") }
     var batteryPct by remember { mutableStateOf("98%") }
     var cpuTemp by remember { mutableStateOf("44°C") }
     var showShutdownDialog by remember { mutableStateOf(false) }
+    var cursorVisible by remember { mutableStateOf(true) }
 
     var activeGatt by remember { mutableStateOf<BluetoothGatt?>(null) }
     var textureViewRef by remember { mutableStateOf<TextureView?>(null) }
     var cameraDeviceRef by remember { mutableStateOf<CameraDevice?>(null) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(550)
+            cursorVisible = !cursorVisible
+        }
+    }
 
     val requiredPermissions = arrayOf(
         Manifest.permission.CAMERA,
@@ -123,6 +137,7 @@ fun LimboConsoleScreen() {
             } ?: manager.cameraIdList.lastOrNull()
 
             if (externalCamId == null) {
+                isHdmiActive = false
                 statusText = "No UVC Capture Card Detected"
                 return
             }
@@ -134,6 +149,7 @@ fun LimboConsoleScreen() {
             manager.openCamera(externalCamId, object : CameraDevice.StateCallback() {
                 override fun onOpened(camera: CameraDevice) {
                     cameraDeviceRef = camera
+                    isHdmiActive = true
                     statusText = "HDMI LINK ACTIVE (1080p)"
                     val surfaceTexture = textureView.surfaceTexture ?: return
                     surfaceTexture.setDefaultBufferSize(1920, 1080)
@@ -149,6 +165,7 @@ fun LimboConsoleScreen() {
                                 session.setRepeatingRequest(captureRequest.build(), null, handler)
                             }
                             override fun onConfigureFailed(session: CameraCaptureSession) {
+                                isHdmiActive = false
                                 statusText = "UVC Stream Config Failed"
                             }
                         },
@@ -158,15 +175,18 @@ fun LimboConsoleScreen() {
 
                 override fun onDisconnected(camera: CameraDevice) {
                     camera.close()
+                    isHdmiActive = false
                     statusText = "Capture Card Disconnected"
                 }
 
                 override fun onError(camera: CameraDevice, error: Int) {
                     camera.close()
+                    isHdmiActive = false
                     statusText = "UVC Error: $error"
                 }
             }, handler)
         } catch (e: Exception) {
+            isHdmiActive = false
             statusText = "Error: ${e.message}"
         }
     }
@@ -210,9 +230,10 @@ fun LimboConsoleScreen() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(Color(0xFF0A0D12))
             .clickable { hudVisible = !hudVisible }
     ) {
+        // Live Raspberry Pi HDMI Video Layer
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
@@ -230,45 +251,176 @@ fun LimboConsoleScreen() {
             }
         )
 
+        // Raspberry Pi OS / Linux Console Standby Screen (hides automatically when HDMI is live)
+        AnimatedVisibility(
+            visible = !isHdmiActive,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(Color(0xFF1A101B), Color(0xFF0B0E14))
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    color = Color(0xE610141C),
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, Color(0xFF2D3648)),
+                    modifier = Modifier.widthIn(min = 480.dp, max = 660.dp)
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        // Fake Linux Terminal Titlebar
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFF1B202C))
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Terminal,
+                                    contentDescription = null,
+                                    tint = Color(0xFFC51A4A),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    text = "pi@limbo-4b: ~ (HDMI-A-1)",
+                                    color = Color(0xFFE2E8F0),
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Box(Modifier.size(10.dp).background(Color(0xFF4CAF50), CircleShape))
+                                Box(Modifier.size(10.dp).background(Color(0xFFFFB300), CircleShape))
+                                Box(Modifier.size(10.dp).background(Color(0xFFC51A4A), CircleShape))
+                            }
+                        }
+
+                        // Linux Boot / Signal Standby Log
+                        Column(
+                            modifier = Modifier.padding(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "LIMBO PORTABLE WORKSTATION // RASPBERRY PI 4B",
+                                color = Color(0xFFC51A4A),
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = "[  OK  ] Started UVC Display Bridge (1920x1080 @ 60Hz)",
+                                color = Color(0xFF4CAF50),
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 13.sp
+                            )
+                            Text(
+                                text = "[  OK  ] Loaded BLE Power Controller (ESP32-S3 Zero)",
+                                color = Color(0xFF4CAF50),
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 13.sp
+                            )
+                            Text(
+                                text = "[ WAIT ] $statusText",
+                                color = Color(0xFFFFB74D),
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 13.sp
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                text = "pi@limbo:~$ connect --input usb-c-uvc${if (cursorVisible) " _" else ""}",
+                                color = Color(0xFF00E5FF),
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 14.sp
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Button(
+                                    onClick = { textureViewRef?.let { openExternalUvcCamera(it) } },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC51A4A))
+                                ) {
+                                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Re-scan HDMI", fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                                }
+                                OutlinedButton(onClick = { connectEsp32Ble() }) {
+                                    Icon(Icons.Default.Bluetooth, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Pair ESP32-S3", fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Top Floating Raspberry Pi Style Telemetry & Control Bar
         AnimatedVisibility(
             visible = hudVisible,
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 16.dp)
+                .padding(top = 14.dp)
         ) {
             Surface(
-                color = Color(0xCC12141A),
-                shape = RoundedCornerShape(16.dp),
+                color = Color(0xD9121620),
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, Color(0xFF2A3242)),
                 tonalElevation = 8.dp
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 9.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(20.dp)
+                    horizontalArrangement = Arrangement.spacedBy(18.dp)
                 ) {
-                    Text(
-                        text = ";LIMBO",
-                        color = Color(0xFF00E5FF),
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 18.sp
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .background(
+                                    if (isHdmiActive) Color(0xFF4CAF50) else Color(0xFFC51A4A),
+                                    CircleShape
+                                )
+                        )
+                        Text(
+                            text = "LIMBO",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 17.sp
+                        )
+                    }
 
                     Text(
                         text = statusText,
-                        color = Color.LightGray,
+                        color = Color(0xFFB0BEC5),
                         fontSize = 13.sp,
                         fontFamily = FontFamily.Monospace
                     )
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.BatteryChargingFull, contentDescription = null, tint = Color(0xFF4CAF50))
-                        Text(batteryPct, color = Color.White, fontSize = 14.sp)
+                        Text(batteryPct, color = Color.White, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Thermostat, contentDescription = null, tint = Color(0xFFFF9800))
-                        Text(cpuTemp, color = Color.White, fontSize = 14.sp)
+                        Text(cpuTemp, color = Color.White, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
                     }
 
                     IconButton(onClick = { textureViewRef?.let { openExternalUvcCamera(it) } }) {
@@ -278,14 +430,14 @@ fun LimboConsoleScreen() {
                     OutlinedButton(onClick = { connectEsp32Ble() }) {
                         Icon(Icons.Default.Bluetooth, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text(bleStatus, fontSize = 12.sp)
+                        Text(bleStatus, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
                     }
 
                     Button(
                         onClick = { showShutdownDialog = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC51A4A))
                     ) {
-                        Icon(Icons.Default.PowerSettingsNew, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.PowerSettingsNew, contentDescription = null, modifier = Modifier.size(17.dp))
                         Spacer(Modifier.width(6.dp))
                         Text("SAFE SHUTDOWN", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
@@ -302,7 +454,7 @@ fun LimboConsoleScreen() {
                 },
                 confirmButton = {
                     Button(
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC51A4A)),
                         onClick = {
                             sendEsp32Command("SHUTDOWN")
                             statusText = "SHUTTING DOWN PI 4..."
@@ -321,3 +473,4 @@ fun LimboConsoleScreen() {
         }
     }
 }
+
